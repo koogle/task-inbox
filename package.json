@@ -1,0 +1,289 @@
+{
+  "name": "task-inbox",
+  "displayName": "Task Inbox",
+  "description": "A fast inbox for your open GitHub PRs: local diffs and a chat line to the bots working on them.",
+  "version": "0.1.0",
+  "publisher": "local",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/koogle/task-inbox.git"
+  },
+  "private": true,
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "SCM Providers",
+    "Other"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "taskInbox",
+          "title": "Task Inbox",
+          "icon": "media/inbox.svg"
+        }
+      ]
+    },
+    "views": {
+      "taskInbox": [
+        {
+          "id": "taskInbox.prs",
+          "name": "My Open Pull Requests"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "taskInbox.prs",
+        "contents": "Sign in to GitHub to load your pull requests.\n[Sign in to GitHub](command:taskInbox.signIn)",
+        "when": "taskInbox.state == signedOut"
+      },
+      {
+        "view": "taskInbox.prs",
+        "contents": "No GitHub repository found in this workspace.",
+        "when": "taskInbox.state == noRepo"
+      },
+      {
+        "view": "taskInbox.prs",
+        "contents": "Inbox zero: no open pull requests by you here.\n[Refresh](command:taskInbox.refresh)",
+        "when": "taskInbox.state == empty"
+      },
+      {
+        "view": "taskInbox.prs",
+        "contents": "Could not load pull requests.\n[Retry](command:taskInbox.refresh)",
+        "when": "taskInbox.state == error"
+      }
+    ],
+    "commands": [
+      {
+        "command": "taskInbox.refresh",
+        "title": "Refresh",
+        "category": "Task Inbox",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "taskInbox.signIn",
+        "title": "Sign in to GitHub",
+        "category": "Task Inbox"
+      },
+      {
+        "command": "taskInbox.openDiff",
+        "title": "Open All Changes",
+        "category": "Task Inbox",
+        "icon": "$(diff-multiple)"
+      },
+      {
+        "command": "taskInbox.openConversation",
+        "title": "Open Conversation",
+        "category": "Task Inbox",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "taskInbox.messageBot",
+        "title": "Message Bot",
+        "category": "Task Inbox",
+        "icon": "$(hubot)"
+      },
+      {
+        "command": "taskInbox.openInBrowser",
+        "title": "Open on GitHub",
+        "category": "Task Inbox",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "taskInbox.openFileDiff",
+        "title": "Open File Diff",
+        "category": "Task Inbox"
+      },
+      {
+        "command": "taskInbox.openWorktree",
+        "title": "Open Worktree in New Window",
+        "category": "Task Inbox",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "taskInbox.syncWorktree",
+        "title": "Sync Worktree to PR Head (fast-forward)",
+        "category": "Task Inbox",
+        "icon": "$(arrow-down)"
+      },
+      {
+        "command": "taskInbox.removeWorktree",
+        "title": "Remove Worktree",
+        "category": "Task Inbox",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "taskInbox.markRead",
+        "title": "Mark as Read",
+        "category": "Task Inbox",
+        "icon": "$(check)"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "taskInbox.openFileDiff",
+          "when": "false"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "taskInbox.refresh",
+          "when": "view == taskInbox.prs",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "taskInbox.messageBot",
+          "when": "view == taskInbox.prs && viewItem =~ /^pr/",
+          "group": "inline@1"
+        },
+        {
+          "command": "taskInbox.openConversation",
+          "when": "view == taskInbox.prs && viewItem =~ /^pr/",
+          "group": "inline@2"
+        },
+        {
+          "command": "taskInbox.openInBrowser",
+          "when": "view == taskInbox.prs && viewItem =~ /^pr/",
+          "group": "inline@3"
+        },
+        {
+          "command": "taskInbox.openDiff",
+          "when": "view == taskInbox.prs && viewItem =~ /^pr/",
+          "group": "1_pr@1"
+        },
+        {
+          "command": "taskInbox.openConversation",
+          "when": "view == taskInbox.prs && viewItem =~ /^pr/",
+          "group": "1_pr@2"
+        },
+        {
+          "command": "taskInbox.messageBot",
+          "when": "view == taskInbox.prs && viewItem =~ /^pr/",
+          "group": "1_pr@3"
+        },
+        {
+          "command": "taskInbox.openInBrowser",
+          "when": "view == taskInbox.prs && viewItem =~ /^pr/",
+          "group": "1_pr@4"
+        },
+        {
+          "command": "taskInbox.markRead",
+          "when": "view == taskInbox.prs && viewItem =~ /^pr/",
+          "group": "1_pr@5"
+        },
+        {
+          "command": "taskInbox.openWorktree",
+          "when": "view == taskInbox.prs && viewItem =~ /^pr/",
+          "group": "2_worktree@1"
+        },
+        {
+          "command": "taskInbox.syncWorktree",
+          "when": "view == taskInbox.prs && viewItem =~ /^pr\\./",
+          "group": "2_worktree@2"
+        },
+        {
+          "command": "taskInbox.removeWorktree",
+          "when": "view == taskInbox.prs && viewItem == pr.worktree",
+          "group": "2_worktree@3"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Task Inbox",
+      "properties": {
+        "taskInbox.refreshIntervalSeconds": {
+          "type": "number",
+          "default": 60,
+          "minimum": 0,
+          "description": "How often to reload the inbox while the window is focused. 0 disables polling."
+        },
+        "taskInbox.bots": {
+          "type": "array",
+          "description": "Bots to detect on pull requests. A bot is detected when loginPattern matches someone on the PR (author, commenter, reviewer, requested reviewer) or branchPattern matches the head branch. `mention` is prepended to messages sent to that bot; `{login}` in it is replaced by the bot's actual login on the PR. Leave it empty to post a plain comment.",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "loginPattern"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "loginPattern": {
+                "type": "string",
+                "description": "Case-insensitive regex tested against GitHub logins."
+              },
+              "branchPattern": {
+                "type": "string",
+                "description": "Optional case-insensitive regex tested against the PR head branch."
+              },
+              "mention": {
+                "type": "string",
+                "description": "Text prepended to messages, e.g. @claude or @{login}[bot]."
+              }
+            }
+          },
+          "default": [
+            {
+              "name": "Claude",
+              "loginPattern": "^claude",
+              "branchPattern": "^claude/",
+              "mention": "@claude"
+            },
+            {
+              "name": "Devin",
+              "loginPattern": "devin",
+              "branchPattern": "^devin/",
+              "mention": "DevinAI"
+            },
+            {
+              "name": "Inspect",
+              "loginPattern": "inspect",
+              "branchPattern": "^inspect/",
+              "mention": "@{login}[bot]"
+            }
+          ]
+        },
+        "taskInbox.diffInWorktree": {
+          "type": "boolean",
+          "default": true,
+          "description": "Opening a PR's changes checks its branch out into its own git worktree (created on first open) and diffs against those real, editable files. When off, the diff is read-only unless the branch is already checked out."
+        },
+        "taskInbox.worktreeDir": {
+          "type": "string",
+          "default": "",
+          "description": "Directory for PR worktrees, created as <dir>/<repo>/pr-<number>. Empty: a `<repo>.worktrees` folder next to the main checkout."
+        },
+        "taskInbox.repoScanDepth": {
+          "type": "number",
+          "default": 3,
+          "minimum": 0,
+          "description": "How many folder levels below each workspace folder to search for git repositories. 0 only looks at the workspace folder itself."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p .",
+    "watch": "tsc -watch -p .",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.90.0",
+    "@vscode/vsce": "^3.2.0",
+    "typescript": "^5.5.0"
+  }
+}
