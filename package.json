@@ -2,7 +2,7 @@
   "name": "task-inbox",
   "displayName": "Task Inbox",
   "description": "A fast inbox for your open GitHub PRs: local diffs and a chat line to the bots working on them.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "local",
   "license": "MIT",
   "repository": {
@@ -47,17 +47,17 @@
       },
       {
         "view": "taskInbox.prs",
-        "contents": "No GitHub repository found in this workspace.",
+        "contents": "No GitHub repository found in this workspace or its subfolders.\n[Show Log](command:taskInbox.showLog)",
         "when": "taskInbox.state == noRepo"
       },
       {
         "view": "taskInbox.prs",
-        "contents": "Inbox zero: no open pull requests by you here.\n[Refresh](command:taskInbox.refresh)",
+        "contents": "Inbox zero: no open pull requests by you in the repositories found here.\n[Refresh](command:taskInbox.refresh)\n[Show Log](command:taskInbox.showLog)",
         "when": "taskInbox.state == empty"
       },
       {
         "view": "taskInbox.prs",
-        "contents": "Could not load pull requests.\n[Retry](command:taskInbox.refresh)",
+        "contents": "Could not load pull requests.\n[Retry](command:taskInbox.refresh)\n[Show Log](command:taskInbox.showLog)",
         "when": "taskInbox.state == error"
       }
     ],
@@ -125,6 +125,12 @@
         "title": "Mark as Read",
         "category": "Task Inbox",
         "icon": "$(check)"
+      },
+      {
+        "command": "taskInbox.showLog",
+        "title": "Show Log",
+        "category": "Task Inbox",
+        "icon": "$(output)"
       }
     ],
     "menus": {
@@ -139,6 +145,11 @@
           "command": "taskInbox.refresh",
           "when": "view == taskInbox.prs",
           "group": "navigation"
+        },
+        {
+          "command": "taskInbox.showLog",
+          "when": "view == taskInbox.prs",
+          "group": "1_debug"
         }
       ],
       "view/item/context": [

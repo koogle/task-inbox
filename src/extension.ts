@@ -3,6 +3,7 @@ import { allBots, BotConfig, withMention } from './bots';
 import { Conversations } from './conversation';
 import { openAllChanges, openFileDiff, PrContentProvider, SCHEME } from './diff';
 import { getSession, postComment } from './github';
+import { showLog } from './log';
 import { Inbox, needsAttention, Node, PrEntry } from './inbox';
 import { ensureWorktree, removeWorktree, syncWorktree } from './worktree';
 
@@ -102,6 +103,7 @@ export function activate(context: vscode.ExtensionContext): void {
     view,
     vscode.workspace.registerTextDocumentContentProvider(SCHEME, new PrContentProvider()),
     vscode.commands.registerCommand('taskInbox.refresh', () => inbox.refresh(true)),
+    vscode.commands.registerCommand('taskInbox.showLog', showLog),
     vscode.commands.registerCommand(
       'taskInbox.signIn',
       run(async () => {

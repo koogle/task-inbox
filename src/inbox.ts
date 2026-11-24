@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 import { BotConfig, detectBots } from './bots';
 import { aheadBehind, fetchPr, githubRemotes, hasCommit, listWorktrees, repoRoot, Worktree } from './git';
 import { ChangedFile, fetchChanges, fetchMyPrs, getSession, PullRequest } from './github';
+import { log } from './log';
 import { findWorktree } from './worktree';
 
 export interface RepoCtx {
@@ -103,6 +104,10 @@ async function discoverRepos(): Promise<RepoCtx[]> {
       }
     }
   });
+  log(`Scanned ${vscode.workspace.workspaceFolders?.length ?? 0} workspace folder(s) to depth ${depth}: ${checkouts.length} git checkout(s), ${repos.size} GitHub repo(s)`);
+  for (const r of repos.values()) {
+    log(`  ${r.owner}/${r.repo}  ←  ${r.root} (${r.remote})`);
+  }
   return [...repos.values()];
 }
 
@@ -148,12 +153,33 @@ export class Inbox implements vscode.TreeDataProvider<Node> {
       }
       this.multiRepo = repos.length > 1;
       const seen: Seen = { ...this.memento.get<Seen>(SEEN_KEY, {}) };
+      const mine = await fetchMyPrs();
+      const byRepo = new Map<string, PullRequest[]>();
+      for (const pr of mine) {
+        const key = `${pr.owner}/${pr.repo}`.toLowerCase();
+        byRepo.set(key, [...(byRepo.get(key) ?? []), pr]);
+      }
+      const local = new Set(repos.map(r => `${r.owner}/${r.repo}`.toLowerCase()));
+      const elsewhere = [...byRepo.keys()].filter(k => !local.has(k));
+      log(`${mine.length} open PR(s) by you on GitHub; ${mine.length - elsewhere.reduce((n, k) => n + byRepo.get(k)!.length, 0)} in repositories found locally`);
+      if (elsewhere.length) {
+        log(`  no local checkout found for: ${elsewhere.join(', ')}`);
+      }
       const perRepo = await Promise.all(
         repos.map(async ctx => {
-          const [prs, worktrees] = await Promise.all([
-            fetchMyPrs(ctx.owner, ctx.repo),
-            listWorktrees(ctx.root).catch(() => [] as Worktree[]),
-          ]);
+          const key = `${ctx.owner}/${ctx.repo}`.toLowerCase();
+          if (!byRepo.has(key)) {
+            // No open PRs here: drop stale read-state and skip the git work.
+            for (const k of Object.keys(seen)) {
+              if (k.toLowerCase().startsWith(`${key}#`)) {
+                delete seen[k];
+              }
+            }
+            return [];
+          }
+          // Use the casing of the local remote so keys stay stable.
+          const prs = byRepo.get(key)!.map(pr => ({ ...pr, owner: ctx.owner, repo: ctx.repo }));
+          const worktrees = await listWorktrees(ctx.root).catch(() => [] as Worktree[]);
           // Forget read-state of PRs that are no longer open.
           const open = new Set(prs.map(keyOf));
           const prefix = `${ctx.owner}/${ctx.repo}#`;
@@ -175,9 +201,8 @@ export class Inbox implements vscode.TreeDataProvider<Node> {
       }
       if (interactive) {
         void vscode.window.showErrorMessage(`Task Inbox: ${(err as Error).message}`);
-      } else {
-        console.error('[task-inbox]', err);
       }
+      log(`Refresh failed: ${(err as Error).stack ?? err}`);
     } finally {
       this.changed.fire(undefined);
       this.loaded.fire();

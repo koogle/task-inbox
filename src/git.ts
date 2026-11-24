@@ -22,7 +22,8 @@ export async function githubRemotes(cwd: string): Promise<Remote[]> {
   const out = await git(cwd, ['remote', '-v']);
   const remotes = new Map<string, Remote>();
   for (const line of out.split('\n')) {
-    const m = /^(\S+)\s+\S*github\.com[:/]([^/\s]+)\/([^/\s]+?)(?:\.git)?\s/.exec(line);
+    // Host is github.com or an ssh alias containing "github" (e.g. git@github-work:owner/repo.git).
+    const m = /^(\S+)\s+(?:\w+:\/\/)?(?:[^@\/\s]+@)?[\w.-]*github[\w.-]*(?::\d+)?[:/]([^/\s]+)\/([^/\s]+?)(?:\.git)?\s/i.exec(line);
     if (m && !remotes.has(m[1])) {
       remotes.set(m[1], { name: m[1], owner: m[2], repo: m[3] });
     }

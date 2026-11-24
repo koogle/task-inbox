@@ -109,14 +109,31 @@ function actor(a: RawActor): Actor {
 
 const ACTOR = 'login __typename avatarUrl';
 
-export async function fetchMyPrs(owner: string, repo: string): Promise<PullRequest[]> {
+/** All open PRs authored by the viewer, across repositories (up to 200). */
+export async function fetchMyPrs(): Promise<PullRequest[]> {
+  const all: PullRequest[] = [];
+  let after: string | null = null;
+  for (let page = 0; page < 4; page++) {
+    const { prs, next } = await fetchMyPrsPage(after);
+    all.push(...prs);
+    if (!next) {
+      break;
+    }
+    after = next;
+  }
+  return all;
+}
+
+async function fetchMyPrsPage(after: string | null): Promise<{ prs: PullRequest[]; next: string | null }> {
   const data = await graphql<any>(
-    `query($q: String!) {
+    `query($q: String!, $after: String) {
       viewer { login }
-      search(query: $q, type: ISSUE, first: 50) {
+      search(query: $q, type: ISSUE, first: 50, after: $after) {
+        pageInfo { hasNextPage endCursor }
         nodes {
           ... on PullRequest {
             number title url isDraft updatedAt
+            repository { name owner { login } }
             headRefName baseRefName headRefOid baseRefOid
             reviewDecision isCrossRepository mergeable mergeStateStatus
             author { ${ACTOR} }
@@ -130,12 +147,14 @@ export async function fetchMyPrs(owner: string, repo: string): Promise<PullReque
         }
       }
     }`,
-    { q: `repo:${owner}/${repo} is:pr is:open author:@me sort:updated-desc` },
+    { q: 'is:pr is:open author:@me archived:false sort:updated-desc', after },
   );
   const viewer: string = data.viewer.login;
-  return (data.search.nodes as any[])
+  const prs = (data.search.nodes as any[])
     .filter(n => n?.number)
     .map(n => {
+      const owner: string = n.repository.owner.login;
+      const repo: string = n.repository.name;
       const activity: { author: RawActor; createdAt: string }[] = [...n.comments.nodes, ...n.reviews.nodes]
         .filter(Boolean)
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
@@ -176,6 +195,8 @@ export async function fetchMyPrs(owner: string, repo: string): Promise<PullReque
           .map(a => ({ login: a.author!.login, at: a.createdAt })),
       } satisfies PullRequest;
     });
+  const { hasNextPage, endCursor } = data.search.pageInfo;
+  return { prs, next: hasNextPage ? endCursor : null };
 }
 
 export async function fetchChanges(pr: PullRequest): Promise<{ base: string; files: ChangedFile[] }> {
