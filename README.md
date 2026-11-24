@@ -17,7 +17,7 @@ npm run compile
 
 Then press `F5` in this folder to launch an Extension Development Host, and open a folder with a GitHub remote. To install it permanently: `npm run package`, then `Extensions: Install from VSIX...`.
 
-Authentication uses VS Code's built-in GitHub sign-in (`repo` scope).
+Authentication (`taskInbox.auth`): by default the GitHub CLI login (`gh auth login`) is used when available, otherwise VS Code's built-in GitHub sign-in. The CLI login usually has access to organisation repositories that restrict OAuth apps or require SSO, which VS Code's sign-in often cannot see.
 
 ## Settings
 

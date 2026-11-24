@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { allBots, BotConfig, withMention } from './bots';
 import { Conversations } from './conversation';
 import { openAllChanges, openFileDiff, PrContentProvider, SCHEME } from './diff';
-import { getSession, postComment } from './github';
+import { getSession, postComment, resetAuth } from './github';
 import { showLog } from './log';
 import { Inbox, needsAttention, Node, PrEntry } from './inbox';
 import { ensureWorktree, removeWorktree, syncWorktree } from './worktree';
@@ -108,6 +108,7 @@ export function activate(context: vscode.ExtensionContext): void {
       'taskInbox.signIn',
       run(async () => {
         await getSession(true);
+        resetAuth();
         await inbox.refresh(true);
       }),
     ),
@@ -216,12 +217,14 @@ export function activate(context: vscode.ExtensionContext): void {
     ),
     vscode.authentication.onDidChangeSessions(e => {
       if (e.provider.id === 'github') {
+        resetAuth();
         void inbox.refresh();
       }
     }),
     vscode.workspace.onDidChangeWorkspaceFolders(() => void inbox.refresh()),
     vscode.workspace.onDidChangeConfiguration(e => {
       if (e.affectsConfiguration('taskInbox')) {
+        resetAuth();
         schedule();
         void inbox.refresh();
       }

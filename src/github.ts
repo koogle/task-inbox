@@ -1,4 +1,6 @@
+import { execFile } from 'child_process';
 import * as vscode from 'vscode';
+import { log } from './log';
 
 export interface Actor {
   login: string;
@@ -64,12 +66,62 @@ export async function getSession(createIfNone: boolean): Promise<vscode.Authenti
   return vscode.authentication.getSession('github', ['repo'], { createIfNone });
 }
 
+/** Token of the GitHub CLI login, if `gh` is installed and signed in. */
+function ghCliToken(): Promise<string | undefined> {
+  // GUI-launched editors may not have Homebrew on PATH, so try the usual locations too.
+  const candidates = ['gh', '/opt/homebrew/bin/gh', '/usr/local/bin/gh'];
+  const attempt = (i: number): Promise<string | undefined> =>
+    i >= candidates.length
+      ? Promise.resolve(undefined)
+      : new Promise(resolve =>
+          execFile(candidates[i], ['auth', 'token', '--hostname', 'github.com'], { timeout: 5000 }, (err, stdout) =>
+            !err && stdout.trim() ? resolve(stdout.trim()) : resolve(attempt(i + 1)),
+          ),
+        );
+  return attempt(0);
+}
+
+let cached: { token: string; source: string; at: number } | undefined;
+
+/**
+ * `taskInbox.auth`: "gh" uses the GitHub CLI login, "vscode" the editor's GitHub sign-in, and
+ * "auto" prefers the CLI (it usually has organisation/SSO access the editor's OAuth app lacks).
+ */
+async function resolveToken(): Promise<{ token: string; source: string } | undefined> {
+  if (cached && Date.now() - cached.at < 5 * 60 * 1000) {
+    return cached;
+  }
+  const mode = vscode.workspace.getConfiguration('taskInbox').get<string>('auth', 'auto');
+  let found: { token: string; source: string } | undefined;
+  if (mode !== 'vscode') {
+    const token = await ghCliToken();
+    found = token ? { token, source: 'gh CLI login' } : undefined;
+  }
+  if (!found && mode !== 'gh') {
+    const session = await getSession(false);
+    found = session ? { token: session.accessToken, source: `VS Code GitHub sign-in (${session.account.label})` } : undefined;
+  }
+  if (found && found.source !== cached?.source) {
+    log(`Authenticating with the ${found.source}`);
+  }
+  cached = found ? { ...found, at: Date.now() } : undefined;
+  return found;
+}
+
+export function resetAuth(): void {
+  cached = undefined;
+}
+
+export async function hasAuth(): Promise<boolean> {
+  return !!(await resolveToken());
+}
+
 async function token(): Promise<string> {
-  const session = await getSession(false);
-  if (!session) {
+  const found = await resolveToken();
+  if (!found) {
     throw new SignedOutError();
   }
-  return session.accessToken;
+  return found.token;
 }
 
 async function rest(path: string, opts: { method?: string; body?: unknown; accept?: string } = {}): Promise<Response> {

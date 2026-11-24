@@ -2,7 +2,7 @@
   "name": "task-inbox",
   "displayName": "Task Inbox",
   "description": "A fast inbox for your open GitHub PRs: local diffs and a chat line to the bots working on them.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "local",
   "license": "MIT",
   "repository": {
@@ -42,7 +42,7 @@
     "viewsWelcome": [
       {
         "view": "taskInbox.prs",
-        "contents": "Sign in to GitHub to load your pull requests.\n[Sign in to GitHub](command:taskInbox.signIn)",
+        "contents": "Sign in to GitHub to load your pull requests. If the GitHub CLI is installed, `gh auth login` works too.\n[Sign in to GitHub](command:taskInbox.signIn)",
         "when": "taskInbox.state == signedOut"
       },
       {
@@ -282,6 +282,21 @@
           "default": 3,
           "minimum": 0,
           "description": "How many folder levels below each workspace folder to search for git repositories. 0 only looks at the workspace folder itself."
+        },
+        "taskInbox.auth": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "gh",
+            "vscode"
+          ],
+          "default": "auto",
+          "enumDescriptions": [
+            "Use the GitHub CLI login when available, otherwise VS Code's GitHub sign-in.",
+            "Always use the GitHub CLI login (`gh auth login`).",
+            "Always use VS Code's GitHub sign-in."
+          ],
+          "description": "Which GitHub credentials to use. VS Code's sign-in often cannot see organisation repositories that restrict OAuth apps or require SSO; the GitHub CLI login usually can."
         }
       }
     }

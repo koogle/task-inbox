@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { BotConfig, detectBots } from './bots';
 import { aheadBehind, fetchPr, githubRemotes, hasCommit, listWorktrees, repoRoot, Worktree } from './git';
-import { ChangedFile, fetchChanges, fetchMyPrs, getSession, PullRequest } from './github';
+import { ChangedFile, fetchChanges, fetchMyPrs, hasAuth, PullRequest } from './github';
 import { log } from './log';
 import { findWorktree } from './worktree';
 
@@ -140,7 +140,7 @@ export class Inbox implements vscode.TreeDataProvider<Node> {
 
   private async load(interactive: boolean): Promise<void> {
     try {
-      if (!(await getSession(false))) {
+      if (!(await hasAuth())) {
         this.entries = [];
         this.setState('signedOut');
         return;
