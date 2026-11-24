@@ -31,6 +31,14 @@ export interface PrEntry {
   unreadFrom?: string;
   /** The PR head moved since the diff was last opened. */
   newCommits: boolean;
+  /** Number of the open PR this one is stacked on (its base branch is that PR's head). */
+  stackedOn?: number;
+}
+
+/** PRs chained base-to-head, bottom of the stack first. */
+export interface Stack {
+  id: string;
+  members: PrEntry[];
 }
 
 export interface Changes {
@@ -38,7 +46,10 @@ export interface Changes {
   files: ChangedFile[];
 }
 
-export type Node = { kind: 'pr'; entry: PrEntry } | { kind: 'file'; entry: PrEntry; file: ChangedFile; base: string };
+export type Node =
+  | { kind: 'pr'; entry: PrEntry }
+  | { kind: 'file'; entry: PrEntry; file: ChangedFile; base: string }
+  | { kind: 'stack'; stack: Stack };
 
 type State = 'loading' | 'ok' | 'signedOut' | 'noRepo' | 'empty' | 'error';
 type Seen = Record<string, { at: string; head: string }>;
@@ -46,6 +57,56 @@ type Seen = Record<string, { at: string; head: string }>;
 const SEEN_KEY = 'taskInbox.seen';
 const keyOf = (pr: PullRequest) => `${pr.owner}/${pr.repo}#${pr.number}`;
 const lastOther = (pr: PullRequest) => pr.othersActivity.at(-1)?.at ?? '';
+
+/**
+ * Group PRs into stacks: a PR is stacked on another open PR of the same repository when its base
+ * branch is that PR's head branch. Sets `stackedOn` on every entry; returns singles and stacks.
+ */
+export function groupStacks(entries: PrEntry[]): (PrEntry | Stack)[] {
+  const repoOf = (e: PrEntry) => `${e.pr.owner}/${e.pr.repo}`.toLowerCase();
+  const byHead = new Map<string, PrEntry>();
+  for (const e of entries) {
+    if (!e.pr.isCrossRepository) {
+      byHead.set(`${repoOf(e)}:${e.pr.headRefName}`, e);
+    }
+  }
+  const children = new Map<PrEntry, PrEntry[]>();
+  const roots: PrEntry[] = [];
+  for (const e of entries) {
+    const parent = byHead.get(`${repoOf(e)}:${e.pr.baseRefName}`);
+    e.stackedOn = parent && parent !== e ? parent.pr.number : undefined;
+    if (parent && parent !== e) {
+      children.set(parent, [...(children.get(parent) ?? []), e]);
+    } else {
+      roots.push(e);
+    }
+  }
+  const placed = new Set<PrEntry>();
+  const walk = (e: PrEntry, into: PrEntry[]) => {
+    if (placed.has(e)) {
+      return;
+    }
+    placed.add(e);
+    into.push(e);
+    for (const c of (children.get(e) ?? []).sort((a, b) => a.pr.number - b.pr.number)) {
+      walk(c, into);
+    }
+  };
+  const result: (PrEntry | Stack)[] = [];
+  for (const root of roots) {
+    const members: PrEntry[] = [];
+    walk(root, members);
+    result.push(members.length > 1 ? { id: `stack:${keyOf(root.pr)}`, members } : root);
+  }
+  // Entries only reachable through a cycle of bases: show them on their own.
+  for (const e of entries) {
+    if (!placed.has(e)) {
+      e.stackedOn = undefined;
+      result.push(e);
+    }
+  }
+  return result;
+}
 
 export const needsAttention = (e: PrEntry) => e.unread > 0 || e.newCommits || (e.drift?.behind ?? 0) > 0;
 
@@ -289,7 +350,10 @@ export class Inbox implements vscode.TreeDataProvider<Node> {
 
   async getChildren(node?: Node): Promise<Node[]> {
     if (!node) {
-      return this.entries.map(entry => ({ kind: 'pr', entry }));
+      return this.topLevel();
+    }
+    if (node.kind === 'stack') {
+      return node.stack.members.map(entry => ({ kind: 'pr', entry }));
     }
     if (node.kind === 'pr') {
       const { base, files } = await this.getChanges(node.entry);
@@ -299,7 +363,53 @@ export class Inbox implements vscode.TreeDataProvider<Node> {
   }
 
   getTreeItem(node: Node): vscode.TreeItem {
-    return node.kind === 'pr' ? this.prItem(node.entry) : this.fileItem(node);
+    return node.kind === 'pr' ? this.prItem(node.entry) : node.kind === 'stack' ? this.stackItem(node.stack) : this.fileItem(node);
+  }
+
+  /** Re-render with the current sort and stack settings, without reloading from GitHub. */
+  rerender(): void {
+    this.changed.fire(undefined);
+  }
+
+  private topLevel(): Node[] {
+    const config = vscode.workspace.getConfiguration('taskInbox');
+    const byNumber = config.get<string>('sortBy', 'updated') === 'number';
+    const items: (PrEntry | Stack)[] = config.get<boolean>('showStacks', true)
+      ? groupStacks(this.entries)
+      : this.entries.map(e => ((e.stackedOn = undefined), e));
+    const members = (i: PrEntry | Stack) => ('members' in i ? i.members : [i]);
+    // A stack sorts by its newest member, so activity anywhere in it brings it up.
+    const updated = (i: PrEntry | Stack) => members(i).reduce((m, e) => (e.pr.updatedAt > m ? e.pr.updatedAt : m), '');
+    const number = (i: PrEntry | Stack) => Math.max(...members(i).map(e => e.pr.number));
+    items.sort((a, b) =>
+      byNumber
+        ? number(b) - number(a) || members(a)[0].pr.repo.localeCompare(members(b)[0].pr.repo)
+        : updated(b).localeCompare(updated(a)),
+    );
+    return items.map(i => ('members' in i ? { kind: 'stack', stack: i } : { kind: 'pr', entry: i }));
+  }
+
+  private stackItem(stack: Stack): vscode.TreeItem {
+    const [root] = stack.members;
+    const item = new vscode.TreeItem(
+      `Stack of ${stack.members.length} on ${root.pr.baseRefName}`,
+      vscode.TreeItemCollapsibleState.Expanded,
+    );
+    item.id = stack.id;
+    item.contextValue = 'stack';
+    item.iconPath = new vscode.ThemeIcon('layers');
+    const attention = stack.members.filter(needsAttention).length;
+    item.description = [
+      this.multiRepo ? root.pr.repo : '',
+      stack.members.map(e => `#${e.pr.number}`).join(' → '),
+      attention ? `${attention} need attention` : '',
+    ]
+      .filter(Boolean)
+      .join(' · ');
+    item.tooltip = stack.members
+      .map(e => `#${e.pr.number} ${e.pr.title}${e.stackedOn ? ` (on #${e.stackedOn})` : ''}`)
+      .join('\n');
+    return item;
   }
 
   private prItem(entry: PrEntry): vscode.TreeItem {
@@ -308,7 +418,7 @@ export class Inbox implements vscode.TreeDataProvider<Node> {
     item.id = keyOf(pr);
     item.contextValue = worktree ? (worktree.isMain ? 'pr.main' : 'pr.worktree') : 'pr';
 
-    const parts = [`${this.multiRepo ? pr.repo : ''}#${pr.number}`];
+    const parts = [`${this.multiRepo ? pr.repo : ''}#${pr.number}${entry.stackedOn ? ` ↳ #${entry.stackedOn}` : ''}`];
     if (entry.unread) {
       parts.push(`💬 ${entry.unread} ${entry.unreadFrom ?? ''}`.trim());
     }

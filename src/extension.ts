@@ -40,7 +40,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   /** Resolve the PR a command applies to: the tree node it was invoked on, or a quick pick. */
   const pick = async (node?: Node): Promise<PrEntry | undefined> => {
-    if (node?.entry) {
+    if (node && 'entry' in node) {
       return node.entry;
     }
     if (!inbox.entries.length) {
@@ -56,6 +56,9 @@ export function activate(context: vscode.ExtensionContext): void {
     );
     return choice?.entry;
   };
+
+  const setting = (key: string, value: unknown) =>
+    vscode.workspace.getConfiguration('taskInbox').update(key, value, vscode.ConfigurationTarget.Global);
 
   const run = (fn: (node?: Node) => Promise<unknown>) => async (node?: Node) => {
     try {
@@ -104,6 +107,11 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.workspace.registerTextDocumentContentProvider(SCHEME, new PrContentProvider()),
     vscode.commands.registerCommand('taskInbox.refresh', () => inbox.refresh(true)),
     vscode.commands.registerCommand('taskInbox.showLog', showLog),
+    vscode.commands.registerCommand('taskInbox.sortByUpdated', () => setting('sortBy', 'updated')),
+    vscode.commands.registerCommand('taskInbox.sortByNumber', () => setting('sortBy', 'number')),
+    vscode.commands.registerCommand('taskInbox.toggleStacks', () =>
+      setting('showStacks', !vscode.workspace.getConfiguration('taskInbox').get<boolean>('showStacks', true)),
+    ),
     vscode.commands.registerCommand(
       'taskInbox.signIn',
       run(async () => {
@@ -223,7 +231,9 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.workspace.onDidChangeWorkspaceFolders(() => void inbox.refresh()),
     vscode.workspace.onDidChangeConfiguration(e => {
-      if (e.affectsConfiguration('taskInbox')) {
+      if (e.affectsConfiguration('taskInbox.sortBy') || e.affectsConfiguration('taskInbox.showStacks')) {
+        inbox.rerender();
+      } else if (e.affectsConfiguration('taskInbox')) {
         resetAuth();
         schedule();
         void inbox.refresh();

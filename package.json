@@ -2,7 +2,7 @@
   "name": "task-inbox",
   "displayName": "Task Inbox",
   "description": "A fast inbox for your open GitHub PRs: local diffs and a chat line to the bots working on them.",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "publisher": "local",
   "license": "MIT",
   "repository": {
@@ -131,6 +131,24 @@
         "title": "Show Log",
         "category": "Task Inbox",
         "icon": "$(output)"
+      },
+      {
+        "command": "taskInbox.sortByUpdated",
+        "title": "Sort by Last Updated",
+        "category": "Task Inbox",
+        "toggled": "config.taskInbox.sortBy == 'updated'"
+      },
+      {
+        "command": "taskInbox.sortByNumber",
+        "title": "Sort by Number",
+        "category": "Task Inbox",
+        "toggled": "config.taskInbox.sortBy == 'number'"
+      },
+      {
+        "command": "taskInbox.toggleStacks",
+        "title": "Group Stacked PRs",
+        "category": "Task Inbox",
+        "toggled": "config.taskInbox.showStacks"
       }
     ],
     "menus": {
@@ -149,7 +167,22 @@
         {
           "command": "taskInbox.showLog",
           "when": "view == taskInbox.prs",
-          "group": "1_debug"
+          "group": "9_debug"
+        },
+        {
+          "command": "taskInbox.sortByUpdated",
+          "when": "view == taskInbox.prs",
+          "group": "1_sort@1"
+        },
+        {
+          "command": "taskInbox.sortByNumber",
+          "when": "view == taskInbox.prs",
+          "group": "1_sort@2"
+        },
+        {
+          "command": "taskInbox.toggleStacks",
+          "when": "view == taskInbox.prs",
+          "group": "2_stacks@1"
         }
       ],
       "view/item/context": [
@@ -297,6 +330,24 @@
             "Always use VS Code's GitHub sign-in."
           ],
           "description": "Which GitHub credentials to use. VS Code's sign-in often cannot see organisation repositories that restrict OAuth apps or require SSO; the GitHub CLI login usually can."
+        },
+        "taskInbox.sortBy": {
+          "type": "string",
+          "enum": [
+            "updated",
+            "number"
+          ],
+          "default": "updated",
+          "enumDescriptions": [
+            "Most recently updated first.",
+            "Highest PR number first."
+          ],
+          "description": "Order of pull requests in the inbox. A stack is placed by its most recently updated (or highest-numbered) PR."
+        },
+        "taskInbox.showStacks": {
+          "type": "boolean",
+          "default": true,
+          "description": "Group stacked pull requests (a PR whose base branch is another of your open PRs) under one stack, bottom of the stack first."
         }
       }
     }
